@@ -1,0 +1,55 @@
+redis {
+    url{
+        sslRatio = 0
+        rateLimit=500
+        db = 0
+//      password = "123456"
+        port=6379
+        nodes = [
+            "127.0.0.1"
+        ]
+    }
+    tag{
+        rateLimit=500
+        db = 0
+    //    password = "123456"
+        port=6379
+        nodes = [
+            "127.0.0.1"
+        ]
+    }
+
+    usr{
+        rateLimit=500
+        db = 0
+    //    password = "123456"
+        port=6379
+        nodes = [
+            "127.0.0.1"
+        ]
+    }
+}
+
+ignite {
+
+    ip = "127.0.0.1"
+    port = 48500
+    path = /tmp/ignite
+    cacheName = rkrcache
+    nodes = ["127.0.0.1:48500"]
+    ttl = 12
+    ttlForNotInRedis = 1
+    guavaNotInRedis = 3000000
+    hot=5
+}
+
+rest {
+    redisMaxRate=10000
+    port = 7070
+    ip = 0.0.0.0
+    path = cache
+    replace{
+        from = "http://"
+        to = "https://"
+    }
+}
