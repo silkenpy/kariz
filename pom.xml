@@ -51,11 +51,11 @@
         </dependency>
 
         <!--&lt;!&ndash; https://mvnrepository.com/artifact/kr.motd.maven/os-maven-plugin &ndash;&gt;-->
-        <dependency>
-            <groupId>kr.motd.maven</groupId>
-            <artifactId>os-maven-plugin</artifactId>
-            <version>1.6.1</version>
-        </dependency>
+        <!--<dependency>-->
+            <!--<groupId>kr.motd.maven</groupId>-->
+            <!--<artifactId>os-maven-plugin</artifactId>-->
+            <!--<version>1.6.1</version>-->
+        <!--</dependency>-->
 
         <!--&lt;!&ndash; https://mvnrepository.com/artifact/org.cache2k/cache2k-core &ndash;&gt;-->
         <!--<dependency>-->
