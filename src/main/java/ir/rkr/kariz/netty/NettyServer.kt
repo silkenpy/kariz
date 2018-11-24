@@ -12,18 +12,68 @@ import io.netty.channel.epoll.EpollEventLoopGroup
 import io.netty.channel.epoll.EpollServerSocketChannel
 import io.netty.channel.socket.SocketChannel
 import io.netty.util.CharsetUtil
-import ir.rkr.kariz.redis.redisHandler
-import ir.rkr.kariz.util.LayeMetrics
+import ir.rkr.kariz.caffeine.CaffeineBuilder
+import ir.rkr.kariz.util.KarizMetrics
 import java.net.InetSocketAddress
 
+fun String.redisRequestParser(): List<String> = this.split("\r\n").filterIndexed { idx, _ -> idx % 2 == 0 }
 
-class HelloServerHandler : ChannelInboundHandlerAdapter() {
+
+class RedidFeeder(val caffeineCache: CaffeineBuilder) : ChannelInboundHandlerAdapter() {
+
+    private fun redisHandler(request: String): String {
+        val parts = request.redisRequestParser()
+
+        println("size ${parts.size}")
+        try {
+            when (parts[1].toLowerCase()) {
+
+
+                "ping" -> return "+PONG\r\n"
+
+                "set" -> {
+                    return if ((parts.size == 6 && parts[4].toLowerCase() == "ex" && caffeineCache.set(parts[2], parts[3], parts[5].toLong()))
+                            || caffeineCache.set(parts[2], parts[3]))
+                        "+OK\r\n"
+                    else
+                        "-Error message\r\n"
+                }
+
+                "setex" -> {
+                    return if (caffeineCache.set(parts[2], parts[4], parts[3].toLong()))
+                        "+OK\r\n"
+                    else
+                        "-Error message\r\n"
+                }
+
+                "expire" -> {
+                    val value = caffeineCache.get(parts[2])
+                    return if (value.isPresent && caffeineCache.set(parts[2], value.get(), parts[3].toLong()))
+                        "+OK\r\n"
+                    else
+                        "-Error message\r\n"
+                }
+                "get" -> {
+                    val value = caffeineCache.get(parts[2])
+                    return if (value.isPresent)
+                        "\$${value.get().length}\r\n${value.get()}\r\n"
+                    else
+                        "$-1\r\n"
+                }
+
+            }
+            return "-Error message\r\n"
+        } catch (e: Exception) {
+            return "-Error message\r\n"
+        }
+    }
 
     @Throws(Exception::class)
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
 
         val inBuffer = msg as ByteBuf
 
+        println(inBuffer.toString(CharsetUtil.US_ASCII))
         ctx.writeAndFlush(Unpooled.copiedBuffer(redisHandler(inBuffer.toString(CharsetUtil.US_ASCII)), CharsetUtil.US_ASCII))
     }
 
@@ -40,7 +90,7 @@ class HelloServerHandler : ChannelInboundHandlerAdapter() {
     }
 }
 
-class NettyServer(config: Config, val layemetrics: LayeMetrics) {
+class NettyServer(val caffeineCache: CaffeineBuilder, config: Config, val karizMetrics: KarizMetrics) {
 
 
     init {
@@ -75,10 +125,12 @@ class NettyServer(config: Config, val layemetrics: LayeMetrics) {
         serverBootstrap.childHandler(object : ChannelInitializer<SocketChannel>() {
             @Throws(Exception::class)
             override fun initChannel(socketChannel: SocketChannel) {
-                socketChannel.pipeline().addLast(HelloServerHandler())
+                socketChannel.pipeline().addLast(RedidFeeder(caffeineCache))
             }
         })
 
         serverBootstrap.bind().sync()
+
+
     }
 }
