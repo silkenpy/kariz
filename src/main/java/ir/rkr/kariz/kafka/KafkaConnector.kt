@@ -2,22 +2,21 @@ package ir.rkr.kariz.kafka
 
 
 import com.typesafe.config.Config
+import mu.KotlinLogging
 import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.producer.Callback
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.clients.producer.RecordMetadata
 import java.util.*
 import kotlin.collections.HashMap
 
-
-/**
- * [Results] is a data model for responses.
- */
-data class Results(val results: HashMap<ByteArray, ByteArray> = HashMap<ByteArray, ByteArray>())
 
 class KafkaConnector(val topicName: String, config: Config) {
 
     val consumer: KafkaConsumer<ByteArray, ByteArray>
     val producer: KafkaProducer<ByteArray, ByteArray>
+    private val logger = KotlinLogging.logger {}
 
     init {
 
@@ -29,6 +28,7 @@ class KafkaConnector(val topicName: String, config: Config) {
         config.getObject("kafka.consumer").forEach({ x, y -> println("kafka config $x --> $y"); consumercfg.put(x, y.unwrapped()) })
         consumer = KafkaConsumer(consumercfg)
 
+
         val producercfg = Properties()
         producercfg.put("key.serializer", "org.apache.kafka.common.serialization.ByteArraySerializer")
         producercfg.put("value.serializer", "org.apache.kafka.common.serialization.ByteArraySerializer")
@@ -38,20 +38,43 @@ class KafkaConnector(val topicName: String, config: Config) {
         Thread.sleep(100)
     }
 
-    fun get(): Map<ByteArray, ByteArray> {
+    fun get(): HashMap<String, String> {
         consumer.subscribe(Collections.singletonList(topicName))
         val res = consumer.poll(2000)
-        val msg = HashMap<ByteArray, ByteArray>()
-        res.records(topicName).forEach { it -> msg[it.key()] = it.value() }
+        val msg = HashMap<String, String>()
+        res.records(topicName).forEach { it -> msg[String(it.key())] = String(it.value()) }
         return msg
     }
 
 
-    fun put(key: ByteArray, value: ByteArray) {
-        producer.send(ProducerRecord(topicName, key, value))
+    fun put(key: String, value: String): Boolean {
+
+
+        try {
+            val res = producer.send(ProducerRecord(topicName, key.toByteArray(), value.toByteArray()), object : Callback {
+                override fun onCompletion(p0: RecordMetadata?, p1: Exception?) {
+
+                    if (p1 != null) {
+                        logger.error { "key=$key value=$value" }
+
+                    }
+                }
+            })
+
+            if (res.isDone)
+                return false
+
+            return true
+
+        } catch (e: Exception) {
+            logger.error { "Error in try catch" }
+            return false
+        }
+
+
     }
 
-    fun commit(){
+    fun commit() {
         consumer.commitAsync()
     }
 

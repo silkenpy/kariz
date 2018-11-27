@@ -1,47 +1,27 @@
-redis {
-    url{
-        sslRatio = 0
-        rateLimit=500
-        db = 0
-//      password = "123456"
-        port=6379
-        nodes = [
-            "127.0.0.1"
-        ]
-    }
-    tag{
-        rateLimit=500
-        db = 0
-    //    password = "123456"
-        port=6379
-        nodes = [
-            "127.0.0.1"
-        ]
-    }
+kafka{
+     topic = "kariz"
+     consumer{
+         "bootstrap.servers" = ["localhost:9092"]
+         "group.id" = test6
+         "enable.auto.commit"= false
+         "auto.offset.reset" = latest
+         "max.poll.records" = 10000
 
-    usr{
-        rateLimit=500
-        db = 0
-    //    password = "123456"
-        port=6379
-        nodes = [
-            "127.0.0.1"
-        ]
-    }
+     }
+     producer{
+         "bootstrap.servers" = ["localhost:9092"]
+         "acks" = "1"
+         "compression.type" = lz4
+         "batch.size" = 102400
+         "client.id" = ali
+         "linger.ms" = 50
+         "delivery.timeout.ms" = 5000
+         "max.block.ms" = 4000
+         "request.timeout.ms" = 3000
+     }
 }
 
-ignite {
 
-    ip = "127.0.0.1"
-    port = 48500
-    path = /tmp/ignite
-    cacheName = rkrcache
-    nodes = ["127.0.0.1:48500"]
-    ttl = 12
-    ttlForNotInRedis = 1
-    guavaNotInRedis = 3000000
-    hot=5
-}
 
 rest {
     redisMaxRate=10000

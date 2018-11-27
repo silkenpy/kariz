@@ -4,18 +4,24 @@ package ir.rkr.kariz.caffeine
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
 import com.github.benmanes.caffeine.cache.Expiry
+import com.google.gson.GsonBuilder
 import com.typesafe.config.Config
+import ir.rkr.kariz.kafka.KafkaConnector
 import ir.rkr.kariz.util.KarizMetrics
 import mu.KotlinLogging
 import java.util.*
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 
 data class Entry(val value: String, val ttl: Long)
 
-class CaffeineBuilder(config: Config, val karizMetrics: KarizMetrics) {
+data class Command(val cmd: String, val key: String, val value: String? = null, val ttl: Long? = null)
+
+class CaffeineBuilder(val kafka: KafkaConnector, config: Config, val karizMetrics: KarizMetrics) {
 
     private val logger = KotlinLogging.logger {}
+    private val gson = GsonBuilder().disableHtmlEscaping().create()
     val cache: Cache<String, Entry>
 
 
@@ -35,12 +41,29 @@ class CaffeineBuilder(config: Config, val karizMetrics: KarizMetrics) {
             }
         }).removalListener<String, Entry> { k, v, c -> }
                 .build<String, Entry>()
+
+
+        Executors.newSingleThreadScheduledExecutor().scheduleWithFixedDelay({
+
+            val commands = kafka.get()
+
+            commands.forEach { t, u ->
+
+                val parsed = gson.fromJson(u, Command::class.java)
+                when (parsed.cmd) {
+                    "set" -> {set(parsed.key, parsed.value!!,parsed.ttl)}
+
+                }
+            }
+
+
+        }, 0, 100, TimeUnit.MILLISECONDS)
     }
 
 
-    fun set(key: String, value: String, ttl: Long = Long.MAX_VALUE): Boolean {
+    fun set(key: String, value: String, ttl: Long? ): Boolean {
         return try {
-            cache.put(key, Entry(value, ttl))
+            cache.put(key, Entry(value, ttl ?:  Long.MAX_VALUE))
             true
         } catch (e: Exception) {
             logger.error(e) { "Error $e" }

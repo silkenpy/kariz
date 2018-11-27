@@ -6,10 +6,10 @@ package ir.rkr.kariz
 
 import com.typesafe.config.ConfigFactory
 import ir.rkr.kariz.caffeine.CaffeineBuilder
+import ir.rkr.kariz.kafka.KafkaConnector
+import ir.rkr.kariz.netty.NettyServer
 import ir.rkr.kariz.util.KarizMetrics
 import mu.KotlinLogging
-
-import ir.rkr.kariz.netty.NettyServer
 
 
 const val version = 0.1
@@ -23,8 +23,9 @@ fun main(args: Array<String>) {
     val logger = KotlinLogging.logger {}
     val config = ConfigFactory.defaultApplication()
     val karizMetrics = KarizMetrics()
-   val caffeinCache = CaffeineBuilder(config,karizMetrics)
-    NettyServer(caffeinCache,config,karizMetrics)
+    val kafka = KafkaConnector(config.getString("kafka.topic"), config)
+    val caffeinCache = CaffeineBuilder(kafka, config, karizMetrics)
+    NettyServer(kafka, caffeinCache, config, karizMetrics)
 //    JettyRestServer(config)
 
 
@@ -35,8 +36,6 @@ fun main(args: Array<String>) {
     logger.info { "Kariz V$version is ready :D" }
 
     // caffeine
-
-
 
 
 }
