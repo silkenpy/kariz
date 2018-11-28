@@ -2,9 +2,9 @@ kafka{
      topic = "kariz"
      consumer{
          "bootstrap.servers" = ["localhost:9092"]
-         "group.id" = test6
+      //   "group.id" = test6
          "enable.auto.commit"= false
-         "auto.offset.reset" = latest
+       //  "auto.offset.reset" = latest
          "max.poll.records" = 10000
 
      }

@@ -8,6 +8,7 @@ import org.apache.kafka.clients.producer.Callback
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.clients.producer.RecordMetadata
+import java.net.InetAddress
 import java.util.*
 import kotlin.collections.HashMap
 
@@ -21,11 +22,15 @@ class KafkaConnector(val topicName: String, config: Config) {
     init {
 
 
+        val hostName = InetAddress.getLocalHost().hostName
         val consumercfg = Properties()
-        consumercfg.put("key.deserializer", "org.apache.kafka.common.serialization.ByteArrayDeserializer")
-        consumercfg.put("value.deserializer", "org.apache.kafka.common.serialization.ByteArrayDeserializer")
 
         config.getObject("kafka.consumer").forEach({ x, y -> println("kafka config $x --> $y"); consumercfg.put(x, y.unwrapped()) })
+        consumercfg.put("key.deserializer", "org.apache.kafka.common.serialization.ByteArrayDeserializer")
+        consumercfg.put("value.deserializer", "org.apache.kafka.common.serialization.ByteArrayDeserializer")
+        consumercfg.put("group.id", "${hostName}${System.currentTimeMillis()}")
+        consumercfg.put("auto.offset.reset", "earliest")
+        consumercfg.put("enable.auto.commit", "false")
         consumer = KafkaConsumer(consumercfg)
 
 
@@ -40,7 +45,7 @@ class KafkaConnector(val topicName: String, config: Config) {
 
     fun get(): HashMap<String, String> {
         consumer.subscribe(Collections.singletonList(topicName))
-        val res = consumer.poll(2000)
+        val res = consumer.poll(700)
         val msg = HashMap<String, String>()
         res.records(topicName).forEach { it -> msg[String(it.key())] = String(it.value()) }
         return msg
@@ -48,7 +53,6 @@ class KafkaConnector(val topicName: String, config: Config) {
 
 
     fun put(key: String, value: String): Boolean {
-
 
         try {
             val res = producer.send(ProducerRecord(topicName, key.toByteArray(), value.toByteArray()), object : Callback {

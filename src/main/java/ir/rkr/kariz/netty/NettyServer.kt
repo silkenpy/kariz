@@ -22,7 +22,7 @@ import java.net.InetSocketAddress
 
 fun String.redisRequestParser(): List<String> = this.split("\r\n").filterIndexed { idx, _ -> idx % 2 == 0 }
 
-data class Command(val cmd: String, val key: String, val value: String? = null, val ttl: Long? = null)
+data class Command(val cmd: String, val key: String, val value: String? = null, val ttl: Long? = null, val time: Long)
 
 class RedidFeeder(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder) : ChannelInboundHandlerAdapter() {
 
@@ -33,53 +33,112 @@ class RedidFeeder(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder)
 
         var command: String = ""
 
+        val time = System.currentTimeMillis()
         try {
             when (parts[1].toLowerCase()) {
 
 
-                "ping" -> return "+PONG\r\n"
+//                "select" -> return "+OK\r\n"
 
                 "set" -> {
-//                    return if ((parts.size == 6 && parts[4].toLowerCase() == "ex" && caffeineCache.set(parts[2], parts[3], parts[5].toLong()))
-//                            || caffeineCache.set(parts[2], parts[3]))
 
-                    if (parts.size == 6 && parts[4].toLowerCase() == "ex") {
-                        command = gson.toJson(Command("set", parts[2], parts[3], parts[5].toLong()))
+                    try {
+                        if (parts.size == 6 && parts[4].toLowerCase() == "ex") {
+                            command = gson.toJson(Command("set", parts[2], parts[3], parts[5].toLong(), time))
 
-                    } else
+                        } else
 
-                        if (parts.size == 4) {
-                            command = gson.toJson(Command("set", parts[2], parts[3]))
+                            if (parts.size == 4) {
+                                command = gson.toJson(Command("set", parts[2], parts[3], time = time))
+                            }
 
-                        }
-
-
-                    return if (kafka.put(parts[2], command))
-                        "+OK\r\n"
-                    else
-                        "-Error message\r\n"
+                        return if (command.isNotEmpty() && kafka.put(parts[2], command))
+                            "+OK\r\n"
+                        else
+                            "-Error message\r\n"
+                    } catch (e: Exception) {
+                        return "-Error message\r\n"
+                    }
                 }
 
-                "setex" -> {
-                    return if (caffeineCache.set(parts[2], parts[4], parts[3].toLong()))
-                        "+OK\r\n"
-                    else
-                        "-Error message\r\n"
-                }
 
-                "expire" -> {
-                    val value = caffeineCache.get(parts[2])
-                    return if (value.isPresent && caffeineCache.set(parts[2], value.get(), parts[3].toLong()))
-                        "+OK\r\n"
-                    else
-                        "-Error message\r\n"
-                }
                 "get" -> {
                     val value = caffeineCache.get(parts[2])
                     return if (value.isPresent)
                         "\$${value.get().length}\r\n${value.get()}\r\n"
                     else
                         "$-1\r\n"
+                }
+
+
+                "mset" -> {
+                    return try {
+                        for (i in 2..(parts.size - 1) step 2) {
+
+                            command = gson.toJson(Command("set", parts[i], parts[i + 1], time = time))
+
+                            if (command.isEmpty() || !kafka.put(parts[i], command))
+                                return "-Error message\r\n"
+                        }
+                        "+OK\r\n"
+
+                    } catch (e: Exception) {
+                        "-Error message\r\n"
+                    }
+                }
+
+                "mget" -> {
+                    try {
+                        var values = ""
+
+                        for (i in 2..(parts.size - 1)) {
+                            val value = caffeineCache.get(parts[i])
+                            if (value.isPresent) {
+                                values += "\$${value.get().length}\r\n${value.get()}\r\n"
+
+                            } else values += "\$-1\r\n"
+                        }
+
+                        return "*${parts.size - 2}\r\n$values"
+                    } catch (e: Exception) {
+                        return "-Error message\r\n"
+                    }
+
+                }
+
+                "setex" -> {
+                    command = gson.toJson(Command("set", parts[2], parts[4], parts[3].toLong(), time = time))
+                    return if (command.isEmpty() || !kafka.put(parts[2], command))
+                        "-Error message\r\n"
+                    else
+                        "+OK\r\n"
+                }
+
+                "ping" -> return "+PONG\r\n"
+
+
+                "del" -> {
+                    var deletedNum = 0
+
+                    return try {
+                        for (i in 2..(parts.size - 1)) {
+                            println("i=$i")
+                            command = gson.toJson(Command("del", parts[i], time = time))
+                            if (kafka.put(parts[i], command)) deletedNum += 1
+                        }
+                        ":$deletedNum\r\n"
+                    } catch (e: Exception) {
+                        "-Error message\r\n"
+                    }
+
+
+                }
+                "expire" -> {
+                    command = gson.toJson(Command("expire", parts[2], ttl=parts[3].toLong(),time = time))
+                    return if (parts.size==4 && kafka.put(parts[2], command))
+                        "+OK\r\n"
+                    else
+                        "-Error message\r\n"
                 }
 
             }
@@ -94,7 +153,7 @@ class RedidFeeder(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder)
 
         val inBuffer = msg as ByteBuf
 
-//        println(inBuffer.toString(CharsetUtil.US_ASCII))
+        println(inBuffer.toString(CharsetUtil.US_ASCII))
         ctx.writeAndFlush(Unpooled.copiedBuffer(redisHandler(inBuffer.toString(CharsetUtil.US_ASCII)), CharsetUtil.US_ASCII))
     }
 
