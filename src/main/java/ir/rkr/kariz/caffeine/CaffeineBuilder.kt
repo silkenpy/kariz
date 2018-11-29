@@ -13,6 +13,7 @@ import mu.KotlinLogging
 import java.util.*
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.function.Supplier
 
 
 data class Entry(val value: String, val ttl: Long)
@@ -41,6 +42,7 @@ class CaffeineBuilder(val kafka: KafkaConnector, config: Config, val karizMetric
                 return currentDuration
             }
         }).removalListener<String, Entry> { k, v, c -> }
+                .recordStats()
                 .build<String, Entry>()
 
 
@@ -48,39 +50,52 @@ class CaffeineBuilder(val kafka: KafkaConnector, config: Config, val karizMetric
 
             val commands = kafka.get()
 
-            commands.forEach { t, u ->
+            if (commands.size > 0) {
+                commands.forEach { t, u ->
 
-                val parsed = gson.fromJson(u, Command::class.java)
-                when (parsed.cmd) {
+                    val parsed = gson.fromJson(u, Command::class.java)
+                    when (parsed.cmd) {
 
-                    "set" -> set(parsed.key, parsed.value!!, parsed.ttl, parsed.time)
+                        "set" -> set(parsed.key, parsed.value!!, parsed.ttl, parsed.time)
 
-                    "del" -> del(parsed.key)
+                        "del" -> del(parsed.key)
 
-                    "expire" -> expire(parsed.key, parsed.ttl)
+                        "expire" -> expire(parsed.key, parsed.ttl)
 
+                    }
                 }
+
+                kafka.commit()
             }
 
-            kafka.commit()
-
-
         }, 0, 100, TimeUnit.MILLISECONDS)
+
+        karizMetrics.addGauge("CaffeineStats", Supplier { cache.stats() })
     }
 
 
     fun set(key: String, value: String, ttl: Long?, time: Long): Boolean {
-        return try {
-            if (ttl == null)
-                cache.put(key, Entry(value, Long.MAX_VALUE))
-            else {
-                val remained = ((ttl * 1000 + time) - System.currentTimeMillis()) /1000
 
-                if (remained > 0 )
+        karizMetrics.MarkCaffeineSetCall(1)
+        return try {
+            if (ttl == null) {
+                cache.put(key, Entry(value, Long.MAX_VALUE))
+                karizMetrics.MarkCaffeineSetWithoutTTL(1)
+            } else {
+                val remained = ((ttl * 1000 + time) - System.currentTimeMillis()) / 1000
+
+                if (remained > 0) {
                     cache.put(key, Entry(value, remained))
+                    karizMetrics.MarkCaffeineSetWithTTL(1)
+                } else
+                    karizMetrics.MarkCaffeineSetElapsedTTL(1)
             }
+
+            karizMetrics.MarkCaffeineSetSuccess(1)
             true
+
         } catch (e: Exception) {
+            karizMetrics.MarkCaffeineSetFail(1)
             logger.error(e) { "Error $e" }
             false
         }
@@ -89,37 +104,50 @@ class CaffeineBuilder(val kafka: KafkaConnector, config: Config, val karizMetric
 
     fun get(key: String): Optional<String> {
 
+        karizMetrics.MarkCaffeineGetCall(1)
+
         return try {
-            Optional.of(cache.getIfPresent(key)!!.value)
+            val entry = cache.getIfPresent(key)
+
+            return if (entry != null) {
+                karizMetrics.MarkCaffeineGetAvailable(1)
+                Optional.of(entry.value)
+            } else {
+                karizMetrics.MarkCaffeineGetNotAvailable(1)
+                Optional.empty()
+            }
+
         } catch (e: Exception) {
+            karizMetrics.MarkCaffeineGetFail(1)
             Optional.empty()
         }
-
     }
 
     fun del(key: String): Boolean {
 
         return try {
             cache.invalidate(key)
+            karizMetrics.MarkCaffeineDelSuccess(1)
             true
 
         } catch (e: Exception) {
+            karizMetrics.MarkCaffeineDelFail(1)
             false
         }
     }
 
     fun expire(key: String, ttl: Long?) {
 
-
         try {
-            if (ttl != null)
+            if (ttl != null) {
                 cache.put(key, Entry(cache.getIfPresent(key)!!.value, ttl))
+                karizMetrics.MarkCaffeineExpireSuccess(1)
+            }
 
         } catch (e: Exception) {
+            karizMetrics.MarkCaffeineExpireFail(1)
 
         }
-
     }
-
 
 }

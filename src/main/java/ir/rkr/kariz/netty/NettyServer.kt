@@ -116,7 +116,6 @@ class RedidFeeder(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder)
 
                 "ping" -> return "+PONG\r\n"
 
-
                 "del" -> {
                     var deletedNum = 0
 
@@ -153,7 +152,7 @@ class RedidFeeder(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder)
 
         val inBuffer = msg as ByteBuf
 
-        println(inBuffer.toString(CharsetUtil.US_ASCII))
+//        println(inBuffer.toString(CharsetUtil.US_ASCII))
         ctx.writeAndFlush(Unpooled.copiedBuffer(redisHandler(inBuffer.toString(CharsetUtil.US_ASCII)), CharsetUtil.US_ASCII))
     }
 
@@ -204,7 +203,6 @@ class NettyServer(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder,
         serverBootstrap.option(EpollChannelOption.SO_RCVBUF, 1024 * 1024 * 100)
         serverBootstrap.option(EpollChannelOption.SO_SNDBUF, 1024 * 1024 * 100)
 
-
 //        serverBootstrap.option(EpollChannelOption.TCP_FASTOPEN, 4096)
 //    serverBootstrap.option(EpollChannelOption.TCP_CORK, true)
 
@@ -212,7 +210,7 @@ class NettyServer(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder,
         serverBootstrap.childOption(EpollChannelOption.SO_KEEPALIVE, true)
         serverBootstrap.childOption(EpollChannelOption.SO_REUSEADDR, true)
         serverBootstrap.childOption(EpollChannelOption.TCP_NODELAY, true)
-        serverBootstrap.childOption(EpollChannelOption.SO_BACKLOG, 4096)
+//        serverBootstrap.childOption(EpollChannelOption.SO_BACKLOG, 4096)
         serverBootstrap.childOption(EpollChannelOption.SO_RCVBUF, 1024 * 1024 * 100)
         serverBootstrap.childOption(EpollChannelOption.SO_SNDBUF, 1024 * 1024 * 100)
 
@@ -223,6 +221,7 @@ class NettyServer(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder,
         serverBootstrap.childHandler(object : ChannelInitializer<EpollSocketChannel>() {
             @Throws(Exception::class)
             override fun initChannel(socketChannel: EpollSocketChannel) {
+                karizMetrics.MarkNettyRequests(1)
                 socketChannel.pipeline().addLast(RedidFeeder(kafka, caffeineCache))
             }
         })

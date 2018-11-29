@@ -8,6 +8,7 @@ import com.typesafe.config.ConfigFactory
 import ir.rkr.kariz.caffeine.CaffeineBuilder
 import ir.rkr.kariz.kafka.KafkaConnector
 import ir.rkr.kariz.netty.NettyServer
+import ir.rkr.kariz.rest.JettyRestServer
 import ir.rkr.kariz.util.KarizMetrics
 import mu.KotlinLogging
 
@@ -23,10 +24,10 @@ fun main(args: Array<String>) {
     val logger = KotlinLogging.logger {}
     val config = ConfigFactory.defaultApplication()
     val karizMetrics = KarizMetrics()
-    val kafka = KafkaConnector(config.getString("kafka.topic"), config)
-    val caffeinCache = CaffeineBuilder(kafka, config, karizMetrics)
-    NettyServer(kafka, caffeinCache, config, karizMetrics)
-//    JettyRestServer(config)
+    val kafka = KafkaConnector(config.getString("kafka.topic"), config, karizMetrics)
+    val caffeineCache = CaffeineBuilder(kafka, config, karizMetrics)
+    NettyServer(kafka, caffeineCache, config, karizMetrics)
+    JettyRestServer( config,karizMetrics)
 
 
 //    c.set("ali","ali29")

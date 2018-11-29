@@ -18,75 +18,61 @@ class KarizMetrics {
 
     val metricRegistry = MetricRegistry()
 
-    val UrlBatches = metricRegistry.meter("UrlBatches")
-    val CheckUrl = metricRegistry.meter("CheckUrl")
+    val NettyRequests = metricRegistry.meter("nettyRequests")
 
-    val TagBatches = metricRegistry.meter("TagBatches")
-    val CheckTag = metricRegistry.meter("CheckTag")
+    val KafkaGetCall = metricRegistry.meter("kafkaGetCall")
+    val KafkaGetFail = metricRegistry.meter("kafkaGetFail")
+    val KafkaGetRecords = metricRegistry.meter("kafkaGetRecords")
 
-    val UsrBatches = metricRegistry.meter("UsrBatches")
-    val CheckUsr = metricRegistry.meter("CheckUsr")
+    val KafkaPutCall = metricRegistry.meter("KafkaPutCall")
+    val KafkaPutFail = metricRegistry.meter("KafkaPutFail")
+    val KafkaPutRecords = metricRegistry.meter("kafkaPutRecords")
 
-    val UrlInIgnite = metricRegistry.meter("UrlInIgnite")
-    val UrlNotInIgnite = metricRegistry.meter("UrlNotInIgnite")
+    val CaffeineSetCall = metricRegistry.meter("CaffeineSetCall")
+    val CaffeineSetWithTTL = metricRegistry.meter("CaffeineSetWithTTL")
+    val CaffeineSetWithoutTTL = metricRegistry.meter("CaffeineSetWithoutTTL")
+    val CaffeineSetElapsedTTL = metricRegistry.meter("CaffeineSetElapsedTTL")
+    val CaffeineSetSuccess = metricRegistry.meter("CaffeineSetSuccess")
+    val CaffeineSetFail = metricRegistry.meter("CaffeineSetFail")
 
-    val TagInIgnite = metricRegistry.meter("TagInIgnite")
-    val TagNotInIgnite = metricRegistry.meter("TagNotInIgnite")
+    val CaffeineGetCall = metricRegistry.meter("CaffeineGetCall")
+    val CaffeineGetAvailable = metricRegistry.meter("CaffeineGetAvailable")
+    val CaffeineGetNotAvailable = metricRegistry.meter("CaffeineGetNotAvailable")
+    val CaffeineGetFail = metricRegistry.meter("CaffeineGetFail")
 
-    val UsrInIgnite = metricRegistry.meter("UsrInIgnite")
-    val UsrNotInIgnite = metricRegistry.meter("UsrNotInIgnite")
+    val CaffeineDelSuccess = metricRegistry.meter("CaffeineDelSuccess")
+    val CaffeineDelFail = metricRegistry.meter("CaffeineDelFail")
 
-    val UrlInRedis = metricRegistry.meter("UrlInRedis")
-    val UrlNotInRedis = metricRegistry.meter("UrlNotInRedis")
-    val UrlIn5min = metricRegistry.meter("UrlIn5min")
+    val CaffeineExpireSuccess = metricRegistry.meter("CaffeineExpireSuccess")
+    val CaffeineExpireFail = metricRegistry.meter("CaffeineExpireFail")
 
-    val TagInRedis = metricRegistry.meter("TagInRedis")
-    val TagNotInRedis = metricRegistry.meter("TagNotInRedis")
-    val TagIn5min = metricRegistry.meter("TagIn5min")
+    fun MarkNettyRequests(l: Long = 1) = NettyRequests.mark(l)
 
-    val UsrInRedis = metricRegistry.meter("UsrInRedis")
-    val UsrNotInRedis = metricRegistry.meter("UsrNotInRedis")
-    val UsrIn5min = metricRegistry.meter("UsrIn5min")
-    val UsrBlocked = metricRegistry.meter("UsrBlocked")
+    fun MarkKafkaGetFail(l: Long = 1) = KafkaGetFail.mark(l)
+    fun MarkKafkaGetRecords(l: Long = 1) = KafkaGetRecords.mark(l)
 
+    fun MarkKafkaPutCall(l: Long = 1) = KafkaPutCall.mark(l)
+    fun MarkKafkaPutFail(l: Long = 1) = KafkaPutFail.mark(l)
+    fun MarkKafkaPutRecords(l: Long = 1) = KafkaPutRecords.mark(l)
 
-    fun MarkUrlBatches(l: Long = 1) = UrlBatches.mark(l)
-    fun MarkCheckUrl(l: Long = 1) = CheckUrl.mark(l)
+    fun MarkCaffeineSetCall(l: Long = 1) = CaffeineSetCall.mark(l)
+    fun MarkCaffeineSetWithTTL(l: Long = 1) = CaffeineSetWithTTL.mark(l)
+    fun MarkCaffeineSetWithoutTTL(l: Long = 1) = CaffeineSetWithoutTTL.mark(l)
+    fun MarkCaffeineSetElapsedTTL(l: Long = 1) = CaffeineSetElapsedTTL.mark(l)
+    fun MarkCaffeineSetSuccess(l: Long = 1) = CaffeineSetSuccess.mark(l)
+    fun MarkCaffeineSetFail(l: Long = 1) = CaffeineSetFail.mark(l)
 
-    fun MarkTagBatches(l: Long = 1) = TagBatches.mark(l)
-    fun MarkCheckTag(l: Long = 1) = CheckTag.mark(l)
+    fun MarkCaffeineGetCall(l: Long = 1) = CaffeineGetCall.mark(l)
+    fun MarkCaffeineGetAvailable(l: Long = 1) = CaffeineGetAvailable.mark(l)
+    fun MarkCaffeineGetNotAvailable(l: Long = 1) = CaffeineGetNotAvailable.mark(l)
+    fun MarkCaffeineGetFail(l: Long = 1) = CaffeineGetFail.mark(l)
 
-    fun MarkUrlInIgnite(l: Long = 1) = UrlInIgnite.mark(l)
-    fun MarkUrlNotInIgnite(l: Long = 1) = UrlNotInIgnite.mark(l)
+    fun MarkCaffeineDelSuccess(l: Long = 1) = CaffeineDelSuccess.mark(l)
+    fun MarkCaffeineDelFail(l: Long = 1) = CaffeineDelFail.mark(l)
 
-    fun MarkTagInIgnite(l: Long = 1) = TagInIgnite.mark(l)
-    fun MarkTagNotInIgnite(l: Long = 1) = TagNotInIgnite.mark(l)
+    fun MarkCaffeineExpireSuccess(l: Long = 1) =CaffeineExpireSuccess.mark(l)
+    fun MarkCaffeineExpireFail(l: Long = 1) =CaffeineExpireFail.mark(l)
 
-    fun MarkUrlIn5min(l: Long = 1) = UrlIn5min.mark(l)
-    fun MarkUsrIn5min(l: Long = 1) = UsrIn5min.mark(l)
-    fun MarkTagIn5min(l: Long = 1) = TagIn5min.mark(l)
-
-    fun MarkUsrBatches(l: Long = 1) = UsrBatches.mark(l)
-    fun MarkCheckUsr(l: Long = 1) = CheckUsr.mark(l)
-
-    fun MarkUsrInIgnite(l: Long = 1) = UsrInIgnite.mark(l)
-    fun MarkUsrNotInIgnite(l: Long = 1) = UsrNotInIgnite.mark(l)
-    fun MarkUsrBlocked(l: Long = 1) = UsrBlocked.mark(l)
-
-
-    fun MarkInRedis(l: Long = 1, name: String) {
-        if (name == "URL") UrlInRedis.mark(l)
-        if (name == "TAG") TagInRedis.mark(l)
-        if (name == "USR") UsrInRedis.mark(l)
-
-    }
-
-    fun MarkNotInRedis(l: Long = 1, name: String) {
-        if (name == "URL") UrlNotInRedis.mark(l)
-        if (name == "TAG") TagNotInRedis.mark(l)
-        if (name == "USR") UsrNotInRedis.mark(l)
-
-    }
 
     fun <T> addGauge(name: String, supplier: Supplier<T>) = metricRegistry.register(name, Gauge<T> { supplier.get() })
 

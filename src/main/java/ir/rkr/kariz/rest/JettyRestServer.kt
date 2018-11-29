@@ -2,6 +2,8 @@ package ir.rkr.kariz.rest
 
 import com.google.gson.GsonBuilder
 import com.typesafe.config.Config
+import ir.rkr.kariz.caffeine.CaffeineBuilder
+import ir.rkr.kariz.util.KarizMetrics
 import org.eclipse.jetty.http.HttpStatus
 import org.eclipse.jetty.server.Server
 import org.eclipse.jetty.server.ServerConnector
@@ -18,7 +20,7 @@ import javax.servlet.http.HttpServletResponse
  * in-memory cache layer based on ignite to increase performance and decrease number of requests of
  * redis cluster.
  */
-class JettyRestServer(val config: Config) : HttpServlet() {
+class JettyRestServer(val config: Config, val karizMetrics: KarizMetrics) : HttpServlet() {
 
     private val gson = GsonBuilder().disableHtmlEscaping().create()
     /**
@@ -48,6 +50,18 @@ class JettyRestServer(val config: Config) : HttpServlet() {
             }
 
         })   , "/")
+
+        handler.addServlet(ServletHolder(object : HttpServlet() {
+            override fun doGet(req: HttpServletRequest, resp: HttpServletResponse) {
+
+                resp.apply {
+                    status = HttpStatus.OK_200
+                    addHeader("Content-Type", "application/json; charset=utf-8")
+                    //addHeader("Connection", "close")
+                    writer.write(gson.toJson(karizMetrics.getInfo()))
+                }
+            }
+        }), "/metrics")
 
         handler.addServlet(ServletHolder(object : HttpServlet() {
             override fun doGet(req: HttpServletRequest, resp: HttpServletResponse) {
