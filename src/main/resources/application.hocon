@@ -5,14 +5,14 @@ kafka{
       //   "group.id" = test6
          "enable.auto.commit"= false
        //  "auto.offset.reset" = latest
-         "max.poll.records" = 10000
+         "max.poll.records" = 50000
 
      }
      producer{
          "bootstrap.servers" = ["localhost:9092"]
          "acks" = "1"
          "compression.type" = lz4
-         "batch.size" = 102400
+         "batch.size" = 1024000
          "client.id" = ali
          "linger.ms" = 50
          "delivery.timeout.ms" = 5000
@@ -22,14 +22,8 @@ kafka{
 }
 
 
-
 rest {
-    redisMaxRate=10000
-    port = 7070
+    port = 36379
     ip = 0.0.0.0
-    path = cache
-    replace{
-        from = "http://"
-        to = "https://"
-    }
+
 }

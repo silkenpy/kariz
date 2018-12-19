@@ -1,5 +1,7 @@
 package ir.rkr.kariz.netty
 
+import com.github.benmanes.caffeine.cache.Cache
+import com.github.benmanes.caffeine.cache.Caffeine
 import com.google.gson.GsonBuilder
 import com.typesafe.config.Config
 import io.netty.bootstrap.ServerBootstrap
@@ -12,24 +14,38 @@ import io.netty.channel.epoll.EpollChannelOption
 import io.netty.channel.epoll.EpollEventLoopGroup
 import io.netty.channel.epoll.EpollServerSocketChannel
 import io.netty.channel.epoll.EpollSocketChannel
+import io.netty.handler.timeout.ReadTimeoutHandler
+import io.netty.handler.timeout.WriteTimeoutHandler
 import io.netty.util.CharsetUtil
 import ir.rkr.kariz.caffeine.CaffeineBuilder
 import ir.rkr.kariz.kafka.KafkaConnector
 import ir.rkr.kariz.util.KarizMetrics
 import mu.KotlinLogging
 import java.net.InetSocketAddress
+import java.util.concurrent.TimeUnit
 
 
 fun String.redisRequestParser(): List<String> = this.split("\r\n").filterIndexed { idx, _ -> idx % 2 == 0 }
 
 data class Command(val cmd: String, val key: String, val value: String? = null, val ttl: Long? = null, val time: Long)
 
-class RedidFeeder(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder) : ChannelInboundHandlerAdapter() {
+class RedisFeeder(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder, val karizMetrics: KarizMetrics) : ChannelInboundHandlerAdapter() {
 
     private val logger = KotlinLogging.logger {}
     private val gson = GsonBuilder().disableHtmlEscaping().create()
+
+    val tempCache: Cache<String, String>
+
+    init {
+        tempCache = Caffeine.newBuilder()
+                .expireAfterWrite(1, TimeUnit.MINUTES)
+                .build<String, String>()
+    }
+
     private fun redisHandler(request: String): String {
+
         val parts = request.redisRequestParser()
+        karizMetrics.MarkNettyRequests(1)
 
         var command: String = ""
 
@@ -55,9 +71,9 @@ class RedidFeeder(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder)
                         return if (command.isNotEmpty() && kafka.put(parts[2], command))
                             "+OK\r\n"
                         else
-                            "-Error message\r\n"
+                            "-Error in Set data to kafka\r\n"
                     } catch (e: Exception) {
-                        return "-Error message\r\n"
+                        return "-Error in Set\r\n"
                     }
                 }
 
@@ -77,13 +93,18 @@ class RedidFeeder(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder)
 
                             command = gson.toJson(Command("set", parts[i], parts[i + 1], time = time))
 
-                            if (command.isEmpty() || !kafka.put(parts[i], command))
-                                return "-Error message\r\n"
+                            val res = kafka.put(parts[i], command)
+                            if (command.isEmpty() || !res) {
+                                logger.warn { res }
+                                return "-Error message1\r\n"
+                            }
                         }
                         "+OK\r\n"
 
                     } catch (e: Exception) {
-                        "-Error message\r\n"
+                        logger.error { e }
+//                        logger.error { parts.toString() }
+                        "-Error in Mset\r\n"
                     }
                 }
 
@@ -101,7 +122,7 @@ class RedidFeeder(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder)
 
                         return "*${parts.size - 2}\r\n$values"
                     } catch (e: Exception) {
-                        return "-Error message\r\n"
+                        return "-Error in Mget\r\n"
                     }
 
                 }
@@ -109,7 +130,7 @@ class RedidFeeder(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder)
                 "setex" -> {
                     command = gson.toJson(Command("set", parts[2], parts[4], parts[3].toLong(), time = time))
                     return if (command.isEmpty() || !kafka.put(parts[2], command))
-                        "-Error message\r\n"
+                        "-Error in Setex\r\n"
                     else
                         "+OK\r\n"
                 }
@@ -121,30 +142,81 @@ class RedidFeeder(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder)
 
                     return try {
                         for (i in 2..(parts.size - 1)) {
-                            println("i=$i")
+//                            println("i=$i")
                             command = gson.toJson(Command("del", parts[i], time = time))
                             if (kafka.put(parts[i], command)) deletedNum += 1
                         }
                         ":$deletedNum\r\n"
                     } catch (e: Exception) {
-                        "-Error message\r\n"
+                        "-Error in Del\r\n"
                     }
 
 
                 }
+
                 "expire" -> {
-                    command = gson.toJson(Command("expire", parts[2], ttl=parts[3].toLong(),time = time))
-                    return if (parts.size==4 && kafka.put(parts[2], command))
+                    command = gson.toJson(Command("expire", parts[2], ttl = parts[3].toLong(), time = time))
+                    return if (parts.size == 4 && kafka.put(parts[2], command))
                         "+OK\r\n"
                     else
-                        "-Error message\r\n"
+                        "-Error in Expire\r\n"
+                }
+
+                "command" -> return "+OK\r\n"
+
+                "quit" -> return "+OK\r\n"
+
+                else -> {
+                    logger.error { parts.toString() }
+                    return "-Error Command not found\r\n"
                 }
 
             }
-            return "-Error message\r\n"
+
         } catch (e: Exception) {
-            return "-Error message\r\n"
+
+            logger.error { e }
+            return "-Internal Error\r\n"
         }
+    }
+
+
+    private fun validator(id: String, tempRaw: String): String {
+
+        val raw = tempCache.getIfPresent(id).orEmpty() + tempRaw
+
+        if (raw.isNullOrEmpty())
+            return ""
+
+        val command = raw.split("\r\n")
+
+        if (command[0].startsWith("*")) {
+            val partsNum = command[0].split("*")[1].toInt()
+
+            try {
+                for (i in 1..partsNum * 2 step 2) {
+
+                    if (command[i].split("$")[1].toInt() != command[i + 1].length) {
+                        tempCache.put(id, raw)
+                        return ""
+                    }
+                }
+
+                tempCache.invalidate(id)
+                return raw
+
+            } catch (e: Exception) {
+                tempCache.put(id, raw)
+                return ""
+            }
+
+
+        } else {
+
+            logger.error { "Invalid Command" }
+            return "*1\r\n$7\r\ninvalid\r\n"
+        }
+
     }
 
     @Throws(Exception::class)
@@ -153,14 +225,16 @@ class RedidFeeder(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder)
         val inBuffer = msg as ByteBuf
 
 //        println(inBuffer.toString(CharsetUtil.US_ASCII))
-        ctx.writeAndFlush(Unpooled.copiedBuffer(redisHandler(inBuffer.toString(CharsetUtil.US_ASCII)), CharsetUtil.US_ASCII))
-    }
 
-//    @Throws(Exception::class)
-//    override fun channelReadComplete(ctx: ChannelHandlerContext) {
-//        ctx.writeAndFlush(Unpooled.EMPTY_BUFFER)
-//                .addListener(ChannelFutureListener.CLOSE)
-//    }
+        val command = validator("${ctx.channel().remoteAddress()}${ctx.channel().id()}", inBuffer.toString(CharsetUtil.US_ASCII))
+
+        inBuffer.release()
+//        logger.info { ctx.channel().remoteAddress().toString() + "  " + ctx.channel().id() + "  " + command.toString() }
+        if (command.isNotEmpty()) {
+            ctx.writeAndFlush(Unpooled.copiedBuffer(redisHandler(command), CharsetUtil.US_ASCII))
+        }
+//        ctx.close()
+    }
 
     @Throws(Exception::class)
     override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
@@ -174,55 +248,35 @@ class NettyServer(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder,
 
     init {
 
+        val parent = EpollEventLoopGroup(80).apply { setIoRatio(70) }
+        val child = EpollEventLoopGroup(80).apply { setIoRatio(70) }
 
-        val parent = EpollEventLoopGroup(32)
-        parent.setIoRatio(70)
-
-        val child = EpollEventLoopGroup(32)
-        child.setIoRatio(70)
-
-        val serverBootstrap = ServerBootstrap()
-        serverBootstrap.group(parent, child)
-
-//        serverBootstrap.channelFactory(object : ChannelFactory<EpollServerSocketChannel>{
-//            override
-//            fun newChannel(): EpollServerSocketChannel {
-//                return EpollServerSocketChannel()
-//            }
-//
-//        })
+        val serverBootstrap = ServerBootstrap().group(parent, child)
         serverBootstrap.channel(EpollServerSocketChannel::class.java)
-        serverBootstrap.localAddress(InetSocketAddress("0.0.0.0", 6379))
+        serverBootstrap.localAddress(InetSocketAddress(config.getString("rest.ip"), config.getInt("rest.port")))
 
-
-        serverBootstrap.option(EpollChannelOption.SO_BACKLOG, 4096)
         serverBootstrap.option(EpollChannelOption.TCP_NODELAY, true)
+        serverBootstrap.option(EpollChannelOption.AUTO_READ, true)
         serverBootstrap.option(EpollChannelOption.SO_REUSEADDR, true)
-//        serverBootstrap.option(EpollChannelOption.CONNECT_TIMEOUT_MILLIS, 2000)
+        serverBootstrap.option(EpollChannelOption.CONNECT_TIMEOUT_MILLIS, 50000)
         serverBootstrap.option(EpollChannelOption.SO_REUSEPORT, true)
         serverBootstrap.option(EpollChannelOption.SO_RCVBUF, 1024 * 1024 * 100)
-        serverBootstrap.option(EpollChannelOption.SO_SNDBUF, 1024 * 1024 * 100)
-
-//        serverBootstrap.option(EpollChannelOption.TCP_FASTOPEN, 4096)
-//    serverBootstrap.option(EpollChannelOption.TCP_CORK, true)
-
 
         serverBootstrap.childOption(EpollChannelOption.SO_KEEPALIVE, true)
         serverBootstrap.childOption(EpollChannelOption.SO_REUSEADDR, true)
         serverBootstrap.childOption(EpollChannelOption.TCP_NODELAY, true)
-//        serverBootstrap.childOption(EpollChannelOption.SO_BACKLOG, 4096)
         serverBootstrap.childOption(EpollChannelOption.SO_RCVBUF, 1024 * 1024 * 100)
-        serverBootstrap.childOption(EpollChannelOption.SO_SNDBUF, 1024 * 1024 * 100)
-
-//    serverBootstrap.childOption(EpollChannelOption.TCP_CORK, true)
-//        serverBootstrap.childOption(EpollChannelOption.TCP_FASTOPEN, 4096)
-
 
         serverBootstrap.childHandler(object : ChannelInitializer<EpollSocketChannel>() {
             @Throws(Exception::class)
             override fun initChannel(socketChannel: EpollSocketChannel) {
-                karizMetrics.MarkNettyRequests(1)
-                socketChannel.pipeline().addLast(RedidFeeder(kafka, caffeineCache))
+
+                val pipeline = socketChannel.pipeline()
+
+                pipeline.addLast("readTimeoutHandler", ReadTimeoutHandler(3000))
+                pipeline.addLast("writeTimeoutHandler", WriteTimeoutHandler(3000))
+
+                pipeline.addLast(RedisFeeder(kafka, caffeineCache, karizMetrics))
             }
         })
 

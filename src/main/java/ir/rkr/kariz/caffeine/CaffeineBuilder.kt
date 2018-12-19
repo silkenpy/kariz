@@ -71,6 +71,7 @@ class CaffeineBuilder(val kafka: KafkaConnector, config: Config, val karizMetric
         }, 0, 100, TimeUnit.MILLISECONDS)
 
         karizMetrics.addGauge("CaffeineStats", Supplier { cache.stats() })
+        karizMetrics.addGauge("CaffeineEstimatedSize", Supplier { cache.estimatedSize() })
     }
 
 
