@@ -23,7 +23,7 @@ class CaffeineBuilder(val kafka: KafkaConnector, config: Config, val karizMetric
 
     private val logger = KotlinLogging.logger {}
     private val gson = GsonBuilder().disableHtmlEscaping().create()
-    val cache: Cache<String, Entry>
+    private val cache: Cache<String, Entry>
 
 
     init {
@@ -42,7 +42,7 @@ class CaffeineBuilder(val kafka: KafkaConnector, config: Config, val karizMetric
                 return currentDuration
             }
         }).removalListener<String, Entry> { k, v, c -> }
-                .recordStats()
+//                .recordStats()
                 .build<String, Entry>()
 
 
@@ -71,7 +71,7 @@ class CaffeineBuilder(val kafka: KafkaConnector, config: Config, val karizMetric
         }, 0, 100, TimeUnit.MILLISECONDS)
 
         karizMetrics.addGauge("CaffeineStats", Supplier { cache.stats() })
-        karizMetrics.addGauge("CaffeineEstimatedSize", Supplier { cache.estimatedSize() })
+//        karizMetrics.addGauge("CaffeineEstimatedSize", Supplier { cache.estimatedSize() })
     }
 
 

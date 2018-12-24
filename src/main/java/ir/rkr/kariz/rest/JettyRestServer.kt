@@ -27,9 +27,12 @@ class JettyRestServer(val config: Config, val karizMetrics: KarizMetrics) : Http
      * Start a jetty server.
      */
     init {
-        val threadPool = QueuedThreadPool(500, 20)
+        val threadPool = QueuedThreadPool(100, 20)
         val server = Server(threadPool)
-        val http = ServerConnector(server).apply { port = config.getInt("monitoring.port") }
+        val http = ServerConnector(server).apply {
+            host= config.getString("metrics.ip")
+            port = config.getInt("metrics.port")
+        }
         server.addConnector(http)
 
         val handler = ServletContextHandler(server, "/")

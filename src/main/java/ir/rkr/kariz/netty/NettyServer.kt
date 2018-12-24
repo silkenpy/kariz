@@ -167,7 +167,6 @@ class RedisFeeder(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder,
                 "quit" -> return "+OK\r\n"
 
                 else -> {
-                    logger.error { parts.toString() }
                     return "-Error Command not found\r\n"
                 }
 
@@ -212,8 +211,7 @@ class RedisFeeder(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder,
 
 
         } else {
-
-            logger.error { "Invalid Command" }
+            logger.error { "Invalid Command or data $raw" }
             return "*1\r\n$7\r\ninvalid\r\n"
         }
 
@@ -222,14 +220,12 @@ class RedisFeeder(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder,
     @Throws(Exception::class)
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
 
-        val inBuffer = msg as ByteBuf
-
-//        println(inBuffer.toString(CharsetUtil.US_ASCII))
+        val inBuffer = (msg as ByteBuf)
 
         val command = validator("${ctx.channel().remoteAddress()}${ctx.channel().id()}", inBuffer.toString(CharsetUtil.US_ASCII))
-
         inBuffer.release()
-//        logger.info { ctx.channel().remoteAddress().toString() + "  " + ctx.channel().id() + "  " + command.toString() }
+//        logger.trace { ctx.channel().remoteAddress().toString() + "  " + ctx.channel().id() + "  " + command }
+
         if (command.isNotEmpty()) {
             ctx.writeAndFlush(Unpooled.copiedBuffer(redisHandler(command), CharsetUtil.US_ASCII))
         }
@@ -248,12 +244,12 @@ class NettyServer(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder,
 
     init {
 
-        val parent = EpollEventLoopGroup(80).apply { setIoRatio(70) }
-        val child = EpollEventLoopGroup(80).apply { setIoRatio(70) }
+        val parent = EpollEventLoopGroup(40).apply { setIoRatio(70) }
+        val child = EpollEventLoopGroup(40).apply { setIoRatio(70) }
 
         val serverBootstrap = ServerBootstrap().group(parent, child)
         serverBootstrap.channel(EpollServerSocketChannel::class.java)
-        serverBootstrap.localAddress(InetSocketAddress(config.getString("rest.ip"), config.getInt("rest.port")))
+        serverBootstrap.localAddress(InetSocketAddress(config.getString("redis.ip"), config.getInt("redis.port")))
 
         serverBootstrap.option(EpollChannelOption.TCP_NODELAY, true)
         serverBootstrap.option(EpollChannelOption.AUTO_READ, true)

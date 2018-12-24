@@ -16,6 +16,6 @@ if [[ ! -f ${JAR_FILE} ]];then
    exit
 fi
 
-java ${CONF_FILE} ${LOG4J_FILE} ${HEAP} -jar ${JAR_FILE}
+java ${CONF_FILE} ${LOG4J_FILE} ${HEAP} -XX:+UseConcMarkSweepGC -jar ${JAR_FILE}
 
 echo $! > $PID_FILE
