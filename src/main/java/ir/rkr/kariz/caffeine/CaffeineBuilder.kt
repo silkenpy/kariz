@@ -10,40 +10,57 @@ import ir.rkr.kariz.kafka.KafkaConnector
 import ir.rkr.kariz.netty.Command
 import ir.rkr.kariz.util.KarizMetrics
 import mu.KotlinLogging
+import java.nio.charset.StandardCharsets
 import java.util.*
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.function.Supplier
 
+class ByteArrayKey(valueStr: String) {
 
-data class Entry(val value: String, val ttl: Long)
+    val value = valueStr.toByteArray(StandardCharsets.US_ASCII)
+
+    override fun hashCode(): Int {
+        return value.contentHashCode()
+    }
+
+    override fun equals(other: Any?): Boolean =
+        (this === other) || (other is ByteArrayKey && this.value.contentEquals(other.value))
+}
+
+class Entry(val value: ByteArrayKey, val ttl: Long)
 
 
 class CaffeineBuilder(val kafka: KafkaConnector, config: Config, val karizMetrics: KarizMetrics) {
 
     private val logger = KotlinLogging.logger {}
     private val gson = GsonBuilder().disableHtmlEscaping().create()
-    private val cache: Cache<String, Entry>
+    private val cache: Cache<ByteArrayKey, Entry>
 
+    fun String.asciiBytes(): ByteArray =
+            this.toByteArray(StandardCharsets.US_ASCII)
+
+    fun String.asciiBytesKey(): ByteArrayKey =
+            ByteArrayKey(this)
 
     init {
 
-        cache = Caffeine.newBuilder().expireAfter(object : Expiry<String, Entry> {
+        cache = Caffeine.newBuilder().expireAfter(object : Expiry<ByteArrayKey, Entry> {
 
-            override fun expireAfterCreate(key: String, value: Entry, currentTime: Long): Long {
+            override fun expireAfterCreate(key: ByteArrayKey, value: Entry, currentTime: Long): Long {
                 return TimeUnit.SECONDS.toNanos(value.ttl)
             }
 
-            override fun expireAfterUpdate(key: String, value: Entry, currentTime: Long, currentDuration: Long): Long {
+            override fun expireAfterUpdate(key: ByteArrayKey, value: Entry, currentTime: Long, currentDuration: Long): Long {
                 return TimeUnit.SECONDS.toNanos(value.ttl)
             }
 
-            override fun expireAfterRead(key: String, value: Entry, currentTime: Long, currentDuration: Long): Long {
+            override fun expireAfterRead(key: ByteArrayKey, value: Entry, currentTime: Long, currentDuration: Long): Long {
                 return currentDuration
             }
-        }).removalListener<String, Entry> { k, v, c -> }
+        }).removalListener<ByteArrayKey, Entry> { k, v, c -> }
 //                .recordStats()
-                .build<String, Entry>()
+                .build<ByteArrayKey, Entry>()
 
 
         Executors.newSingleThreadScheduledExecutor().scheduleWithFixedDelay({
@@ -62,6 +79,8 @@ class CaffeineBuilder(val kafka: KafkaConnector, config: Config, val karizMetric
 
                         "expire" -> expire(parsed.key, parsed.ttl)
 
+                        else -> {logger.error { parsed.toString() }
+                        }
                     }
                 }
 
@@ -70,8 +89,8 @@ class CaffeineBuilder(val kafka: KafkaConnector, config: Config, val karizMetric
 
         }, 0, 100, TimeUnit.MILLISECONDS)
 
-        karizMetrics.addGauge("CaffeineStats", Supplier { cache.stats() })
-//        karizMetrics.addGauge("CaffeineEstimatedSize", Supplier { cache.estimatedSize() })
+//        karizMetrics.addGauge("CaffeineStats", Supplier { cache.stats() })
+        karizMetrics.addGauge("CaffeineEstimatedSize", Supplier { cache.estimatedSize() })
     }
 
 
@@ -80,13 +99,13 @@ class CaffeineBuilder(val kafka: KafkaConnector, config: Config, val karizMetric
         karizMetrics.MarkCaffeineSetCall(1)
         return try {
             if (ttl == null) {
-                cache.put(key, Entry(value, Long.MAX_VALUE))
+                cache.put(key.asciiBytesKey(), Entry(value.asciiBytesKey(), Long.MAX_VALUE))
                 karizMetrics.MarkCaffeineSetWithoutTTL(1)
             } else {
                 val remained = ((ttl * 1000 + time) - System.currentTimeMillis()) / 1000
 
                 if (remained > 0) {
-                    cache.put(key, Entry(value, remained))
+                    cache.put(key.asciiBytesKey(), Entry(value.asciiBytesKey(), remained))
                     karizMetrics.MarkCaffeineSetWithTTL(1)
                 } else
                     karizMetrics.MarkCaffeineSetElapsedTTL(1)
@@ -108,11 +127,15 @@ class CaffeineBuilder(val kafka: KafkaConnector, config: Config, val karizMetric
         karizMetrics.MarkCaffeineGetCall(1)
 
         return try {
-            val entry = cache.getIfPresent(key)
+
+            val entry = cache.getIfPresent(key.asciiBytesKey())
+
+            println(entry.toString())
+
 
             return if (entry != null) {
                 karizMetrics.MarkCaffeineGetAvailable(1)
-                Optional.of(entry.value)
+                Optional.of(String(entry.value.value,StandardCharsets.US_ASCII))
             } else {
                 karizMetrics.MarkCaffeineGetNotAvailable(1)
                 Optional.empty()
@@ -127,7 +150,7 @@ class CaffeineBuilder(val kafka: KafkaConnector, config: Config, val karizMetric
     fun del(key: String): Boolean {
 
         return try {
-            cache.invalidate(key)
+            cache.invalidate(key.asciiBytesKey())
             karizMetrics.MarkCaffeineDelSuccess(1)
             true
 
@@ -141,7 +164,8 @@ class CaffeineBuilder(val kafka: KafkaConnector, config: Config, val karizMetric
 
         try {
             if (ttl != null) {
-                cache.put(key, Entry(cache.getIfPresent(key)!!.value, ttl))
+                val keyBytes = key.asciiBytesKey()
+                cache.put(keyBytes, Entry(cache.getIfPresent(keyBytes)!!.value, ttl))
                 karizMetrics.MarkCaffeineExpireSuccess(1)
             }
 

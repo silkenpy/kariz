@@ -23,6 +23,7 @@ class KarizMetrics {
     val KafkaGetCall = metricRegistry.meter("kafkaGetCall")
     val KafkaGetFail = metricRegistry.meter("kafkaGetFail")
     val KafkaGetRecords = metricRegistry.meter("kafkaGetRecords")
+    val KafkaGetDuplicate = metricRegistry.meter("KafkaGetDuplicate")
 
     val KafkaPutCall = metricRegistry.meter("KafkaPutCall")
     val KafkaPutFail = metricRegistry.meter("KafkaPutFail")
@@ -50,6 +51,7 @@ class KarizMetrics {
 
     fun MarkKafkaGetFail(l: Long = 1) = KafkaGetFail.mark(l)
     fun MarkKafkaGetRecords(l: Long = 1) = KafkaGetRecords.mark(l)
+    fun MarkKafkaGetDuplicate(l: Long = 1) = KafkaGetDuplicate.mark(l)
 
     fun MarkKafkaPutCall(l: Long = 1) = KafkaPutCall.mark(l)
     fun MarkKafkaPutFail(l: Long = 1) = KafkaPutFail.mark(l)

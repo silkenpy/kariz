@@ -54,8 +54,9 @@ class KafkaConnector(val topicName: String, config: Config, val karizMetrics: Ka
 
             consumer.subscribe(Collections.singletonList(topicName))
             val res = consumer.poll(Duration.ofMillis(700))
-            res.records(topicName).forEach { it -> msg[String(it.key())] = String(it.value()) }
             karizMetrics.MarkKafkaGetRecords(res.count().toLong())
+            res.records(topicName).forEach { it -> msg[String(it.key())] = String(it.value()) }
+            karizMetrics.MarkKafkaGetDuplicate(res.count().toLong()- msg.size.toLong())
             msg
 
         } catch (e: java.lang.Exception) {
