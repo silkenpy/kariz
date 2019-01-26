@@ -38,7 +38,7 @@ class RedisFeeder(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder,
 
     init {
         tempCache = Caffeine.newBuilder()
-                .expireAfterWrite(1, TimeUnit.MINUTES)
+                .expireAfterWrite(10, TimeUnit.SECONDS)
                 .build<String, String>()
     }
 
@@ -166,6 +166,8 @@ class RedisFeeder(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder,
 
                 "quit" -> return "+OK\r\n"
 
+                "invalid" -> return "-Error message\r\n"
+
                 else -> {
                     return "-Error Command not found\r\n"
                 }
@@ -184,7 +186,7 @@ class RedisFeeder(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder,
 
         val raw = tempCache.getIfPresent(id).orEmpty() + tempRaw
 
-        if (raw.isNullOrEmpty())
+        if (raw.isEmpty())
             return ""
 
         val command = raw.split("\r\n")
@@ -199,6 +201,11 @@ class RedisFeeder(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder,
                         tempCache.put(id, raw)
                         return ""
                     }
+                }
+
+                if ( (partsNum * 2 + 1) != (command.size - 1) ) {
+                    logger.error { command }
+                    return "*1\r\n$7\r\ninvalid\r\n"
                 }
 
                 tempCache.invalidate(id)

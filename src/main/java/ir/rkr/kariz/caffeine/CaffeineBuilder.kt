@@ -130,9 +130,6 @@ class CaffeineBuilder(val kafka: KafkaConnector, config: Config, val karizMetric
 
             val entry = cache.getIfPresent(key.asciiBytesKey())
 
-            println(entry.toString())
-
-
             return if (entry != null) {
                 karizMetrics.MarkCaffeineGetAvailable(1)
                 Optional.of(String(entry.value.value,StandardCharsets.US_ASCII))
