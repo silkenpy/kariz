@@ -9,7 +9,7 @@
         </Console>
 
         <RollingFile name="RollingFile" fileName="${baseDir}/kariz.log" bufferedIO="true" bufferSize="4096">
-            <FilePattern>${baseDir}/laye-%d{yyyy-MM-dd}-%i.log.gz</FilePattern>
+            <FilePattern>${baseDir}/kariz-%d{yyyy-MM-dd}-%i.log.gz</FilePattern>
             <PatternLayout pattern="%d{yyy-MM-dd HH:mm:ss.SSS} %F:%L [%t] %-5level %logger{36} - %msg%n"/>
             <Policies>
                 <TimeBasedTriggeringPolicy interval="1" modulate="true"/>
