@@ -20,7 +20,8 @@ kafka{
          "request.timeout.ms" = 3000
      }
 }
-
+check.url.rateLimit = 500000
+check.tag.rateLimit = 500000
 
 redis {
     ip = 0.0.0.0

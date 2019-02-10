@@ -47,6 +47,17 @@ class KarizMetrics {
     val CaffeineExpireSuccess = metricRegistry.meter("CaffeineExpireSuccess")
     val CaffeineExpireFail = metricRegistry.meter("CaffeineExpireFail")
 
+
+    val UrlBatches = metricRegistry.meter("UrlBatches")
+    val CheckUrl = metricRegistry.meter("CheckUrl")
+    val UrlInCaffeine = metricRegistry.meter("UrlInCaffeine")
+    val UrlNotInCaffeine = metricRegistry.meter("UrlNotInCaffeine")
+
+    val TagBatches = metricRegistry.meter("TagBatches")
+    val CheckTag = metricRegistry.meter("CheckTag")
+    val TagInCaffeine = metricRegistry.meter("TagInCaffeine")
+    val TagNotInCaffeine = metricRegistry.meter("TagNotInCaffeine")
+
     fun MarkNettyRequests(l: Long = 1) = NettyRequests.mark(l)
 
     fun MarkKafkaGetFail(l: Long = 1) = KafkaGetFail.mark(l)
@@ -72,8 +83,21 @@ class KarizMetrics {
     fun MarkCaffeineDelSuccess(l: Long = 1) = CaffeineDelSuccess.mark(l)
     fun MarkCaffeineDelFail(l: Long = 1) = CaffeineDelFail.mark(l)
 
-    fun MarkCaffeineExpireSuccess(l: Long = 1) =CaffeineExpireSuccess.mark(l)
-    fun MarkCaffeineExpireFail(l: Long = 1) =CaffeineExpireFail.mark(l)
+    fun MarkCaffeineExpireSuccess(l: Long = 1) = CaffeineExpireSuccess.mark(l)
+    fun MarkCaffeineExpireFail(l: Long = 1) = CaffeineExpireFail.mark(l)
+
+    fun MarkUrlBatches(l: Long = 1) = UrlBatches.mark(l)
+    fun MarkCheckUrl(l: Long = 1) = CheckUrl.mark(l)
+    fun MarkUrlInCaffeine(l: Long = 1) = UrlInCaffeine.mark(l)
+    fun MarkUrlNotInCaffeine(l: Long = 1) = UrlNotInCaffeine.mark(l)
+
+    fun MarkTagBatches(l: Long = 1) = TagBatches.mark(l)
+    fun MarkCheckTag(l: Long = 1) = CheckTag.mark(l)
+    fun MarkTagInCaffeine(l: Long = 1) = TagInCaffeine.mark(l)
+    fun MarkTagNotInCaffeine(l: Long = 1) = TagNotInCaffeine.mark(l)
+
+
+
 
 
     fun <T> addGauge(name: String, supplier: Supplier<T>) = metricRegistry.register(name, Gauge<T> { supplier.get() })

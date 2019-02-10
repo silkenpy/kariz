@@ -27,7 +27,7 @@ fun main(args: Array<String>) {
     val kafka = KafkaConnector(config.getString("kafka.topic"), config, karizMetrics)
     val caffeineCache = CaffeineBuilder(kafka, config, karizMetrics)
     NettyServer(kafka, caffeineCache, config, karizMetrics)
-    JettyRestServer( config,karizMetrics)
+    JettyRestServer(caffeineCache, config,karizMetrics)
 
 
 //    c.set("ali","ali29")
