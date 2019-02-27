@@ -33,6 +33,7 @@ class JettyRestServer(val caffeine: CaffeineBuilder, val config: Config, val kar
     private val gson = GsonBuilder().disableHtmlEscaping().create()
     private val urlRateLimiter = RateLimiter.create(config.getDouble("check.url.rateLimit"))
     private val tagRateLimiter = RateLimiter.create(config.getDouble("check.tag.rateLimit"))
+    private val usrRateLimiter = RateLimiter.create(config.getDouble("check.usr.rateLimit"))
 
     /**
      * This function [checkUrl] is used to ask value of a key from ignite server or redis server and update
@@ -84,14 +85,36 @@ class JettyRestServer(val caffeine: CaffeineBuilder, val config: Config, val kar
     }
 
     /**
+     * This function [checkUsr] is used to ask value of a key from ignite server or redis server and update
+     * ignite cluster.
+     */
+    private fun checkUsr(key: String): String {
+        karizMetrics.MarkCheckUsr(1)
+
+        if (!usrRateLimiter.tryAcquire()) return "0"
+
+        val value = caffeine.get(key)
+
+        return if (value.isPresent) {
+            karizMetrics.MarkUsrInCaffeine(1)
+            value.get()
+
+        } else {
+
+            karizMetrics.MarkUsrNotInCaffeine(1)
+            "0"
+        }
+    }
+
+    /**
      * Start a jetty server.
      */
     init {
-        val threadPool = QueuedThreadPool(400,20)
+        val threadPool = QueuedThreadPool( config.getInt("jetty.threadNumMin"),  config.getInt("jetty.threadNumMax"))
         val server = Server(threadPool)
         val http = ServerConnector(server).apply {
-            host = config.getString("metrics.ip")
-            port = config.getInt("metrics.port")
+            host = config.getString("jetty.ip")
+            port = config.getInt("jetty.port")
         }
 
         server.addConnector(http)
@@ -147,7 +170,27 @@ class JettyRestServer(val caffeine: CaffeineBuilder, val config: Config, val kar
             }
         }), "/cache/tag")
 
+        /**
+         * It can handle multi-get requests for Usrs in json format.
+         */
+        handler.addServlet(ServletHolder(object : HttpServlet() {
+            override fun doPost(req: HttpServletRequest, resp: HttpServletResponse) {
+                val msg = Results()
 
+                val parsedJson = gson.fromJson<Array<String>>(req.reader.readText())
+                karizMetrics.MarkUsrBatches(1)
+                for (key in parsedJson) {
+                    if (key.isNotEmpty()) msg.results[key] = checkUsr(key)
+                }
+
+                resp.apply {
+                    status = HttpStatus.OK_200
+                    addHeader("Content-Type", "application/json; charset=utf-8")
+                    //addHeader("Connection", "close")
+                    writer.write(gson.toJson(msg.results))
+                }
+            }
+        }), "/cache/usr")
 
         handler.addServlet(ServletHolder(object : HttpServlet() {
             override fun doGet(req: HttpServletRequest, resp: HttpServletResponse) {

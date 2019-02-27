@@ -58,6 +58,12 @@ class KarizMetrics {
     val TagInCaffeine = metricRegistry.meter("TagInCaffeine")
     val TagNotInCaffeine = metricRegistry.meter("TagNotInCaffeine")
 
+    val UsrBatches = metricRegistry.meter("UsrBatches")
+    val CheckUsr = metricRegistry.meter("CheckUsr")
+    val UsrInCaffeine = metricRegistry.meter("UsrInCaffeine")
+    val UsrNotInCaffeine = metricRegistry.meter("UsrNotInCaffeine")
+
+
     fun MarkNettyRequests(l: Long = 1) = NettyRequests.mark(l)
 
     fun MarkKafkaGetFail(l: Long = 1) = KafkaGetFail.mark(l)
@@ -97,6 +103,10 @@ class KarizMetrics {
     fun MarkTagNotInCaffeine(l: Long = 1) = TagNotInCaffeine.mark(l)
 
 
+    fun MarkUsrBatches(l: Long = 1) = UsrBatches.mark(l)
+    fun MarkCheckUsr(l: Long = 1) = CheckUsr.mark(l)
+    fun MarkUsrInCaffeine(l: Long = 1) = UsrInCaffeine.mark(l)
+    fun MarkUsrNotInCaffeine(l: Long = 1) = UsrNotInCaffeine.mark(l)
 
 
 

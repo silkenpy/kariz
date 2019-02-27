@@ -29,7 +29,7 @@ fun String.redisRequestParser(): List<String> = this.split("\r\n").filterIndexed
 
 data class Command(val cmd: String, val key: String, val value: String? = null, val ttl: Long? = null, val time: Long)
 
-class RedisFeeder(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder, val karizMetrics: KarizMetrics) : ChannelInboundHandlerAdapter() {
+class RedisFeeder(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder, val config: Config, val karizMetrics: KarizMetrics) : ChannelInboundHandlerAdapter() {
 
     private val logger = KotlinLogging.logger {}
     private val gson = GsonBuilder().disableHtmlEscaping().create()
@@ -45,6 +45,7 @@ class RedisFeeder(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder,
     private fun redisHandler(request: String): String {
 
         val parts = request.redisRequestParser()
+        val forcedTtl = config.getInt("redis.forcedTtl")
         karizMetrics.MarkNettyRequests(1)
 
         var command: String = ""
@@ -65,7 +66,11 @@ class RedisFeeder(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder,
                         } else
 
                             if (parts.size == 4) {
-                                command = gson.toJson(Command("set", parts[2], parts[3], time = time))
+                                if (forcedTtl == -1) {
+                                    command = gson.toJson(Command("set", parts[2], parts[3], time = time))
+                                } else {
+                                    command = gson.toJson(Command("set", parts[2], parts[3], forcedTtl.toLong(), time))
+                                }
                             }
 
                         return if (command.isNotEmpty() && kafka.put(parts[2], command))
@@ -203,7 +208,7 @@ class RedisFeeder(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder,
                     }
                 }
 
-                if ( (partsNum * 2 + 1) != (command.size - 1) ) {
+                if ((partsNum * 2 + 1) != (command.size - 1)) {
                     logger.error { command }
                     return "*1\r\n$7\r\ninvalid\r\n"
                 }
@@ -279,7 +284,7 @@ class NettyServer(val kafka: KafkaConnector, val caffeineCache: CaffeineBuilder,
                 pipeline.addLast("readTimeoutHandler", ReadTimeoutHandler(3000))
                 pipeline.addLast("writeTimeoutHandler", WriteTimeoutHandler(3000))
 
-                pipeline.addLast(RedisFeeder(kafka, caffeineCache, karizMetrics))
+                pipeline.addLast(RedisFeeder(kafka, caffeineCache, config, karizMetrics))
             }
         })
 
